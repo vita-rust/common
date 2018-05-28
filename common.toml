@@ -1,4 +1,5 @@
 ### ENVIRONMENT VARIABLES ######################################################
+
 # You'll probably want to overwrite $TITLE and $TITLEID with values specific
 # to your project. Set $STATIC_DIR to change the directory for static files:
 # default is `static`.
@@ -9,17 +10,17 @@ TITLE = "Rust Project"
 TITLEID = "RUST00001"
 # Build configuration
 STATIC_DIR = "static"
-CARGO_TARGET_DIR = "target"
+CARGO_TARGET_DIR = { script = ["echo ${CARGO_TARGET_DIR:=target}"] }
 # Compilation specific
 RUST_TARGET = "armv7-vita-eabihf"
 CARGO_OUT_DIR = "${CARGO_TARGET_DIR}/${RUST_TARGET}/release"
-RUST_TARGET_PATH = "${CARGO_TARGET_DIR}"
 CC="arm-vita-eabi-gcc"
 LINKER = "arm-vita-eabi-gcc"
 LINKER_FLAGS = "-Wl,-q"
 LINKER_SPECS = "${CARGO_OUT_DIR}/specs"
 
-### BUILD TASKS ################################################################
+
+### CLEAN ######################################################################
 
 [tasks.clean-common]
 description = "Clean the `common.toml` file from the project directory."
@@ -29,8 +30,14 @@ script = ["rm -f common.toml"]
 [tasks.clean]
 dependencies = ["clean-common"]
 
+
+### DEFAULT: VPK ###############################################################
+
 [tasks.default]
 alias = "vpk"
+
+
+### COMPILER SPECS #############################################################
 
 [tasks.patch-cc-specs]
 description = "Remove default `libc` linkage from the linker specs."
@@ -43,23 +50,43 @@ script = [
 [tasks.get-target-specs]
 description = "Download target specs from the `vita-rust/common` git repository."
 env = { TARGET_JSON_URL = "https://github.com/vita-rust/common/raw/master/${RUST_TARGET}.json"}
-condition = { script = "test ! -f ${RUST_TARGET_PATH}/${RUST_TARGET}.json" }
-script_runner = "bash"
-script = [ 'curl -SsL "${TARGET_JSON_URL}" > "${RUST_TARGET_PATH}/${RUST_TARGET}.json"' ]
+condition_script = [ 'test ! -f "${CARGO_TARGET_DIR}/${RUST_TARGET}.json"' ]
+script = [ 
+    'mkdir -p "${CARGO_TARGET_DIR}"',
+    'curl -SsL "${TARGET_JSON_URL}" > "${CARGO_TARGET_DIR}/${RUST_TARGET}.json"',
+]
 
-[tasks.build]
+
+
+### BUILD ######################################################################
+
+[tasks.xbuild]
 description = "Build the project using `xargo`."
 dependencies = ["get-target-specs"]
 install_crate = "xargo"
+#script = [
+#    'xargo build --target=armv7-vita-eabifh --release -vv',
+#]
 command = "xargo"
 args = ["build", "--target=armv7-vita-eabihf", "--release", "-vv"]
 
+[tasks.xbuild.env]
+# We need an absolute path to the rustc specs, so we make sure we have one.
+RUST_TARGET_PATH = { script = [
+    '''
+    if [ "${CARGO_TARGET_DIR}" == "${CARGO_TARGET_DIR#/}" ]; then
+      echo "${CARGO_MAKE_WORKING_DIRECTORY}/${CARGO_TARGET_DIR}"
+    else
+      echo "${CARGO_TARGET_DIR}"
+    fi
+    '''
+]}
 
 ### DISTRIBUTION TASKS #########################################################
 
 [tasks.elf]
 description = "Build an ELF executable using the `vitasdk` linker."
-dependencies = ["build", "patch-cc-specs"]
+dependencies = ["xbuild", "patch-cc-specs"]
 script = [
     """
     ${LINKER} ${LINKER_FLAGS} \
@@ -110,7 +137,13 @@ script = [
 description = "List all static resources into a manifest file."
 script = [
   'mkdir -p "${CARGO_OUT_DIR}"',
-  'find "${STATIC_DIR}" -type f > "${CARGO_OUT_DIR}/MANIFEST"'
+  '''
+  if [ -d "${STATIC_DIR}" ]; then
+    find "${STATIC_DIR}" -type f > "${CARGO_OUT_DIR}/MANIFEST"
+  else
+    echo -n > "${CARGO_OUT_DIR}/MANIFEST"
+  fi
+  '''
 ]
 
 [tasks.vpk]
@@ -121,7 +154,7 @@ script = [
   VITA_PACK_VPK_FLAGS=$(
     set +x;
     while read -r line; do
-      echo -n "--add $line=${line#static/} ";
+      echo -n "--add $line=${line#${STATIC_DIR%/}/} ";
     done < "${CARGO_OUT_DIR}/MANIFEST"
   )
   ''',
