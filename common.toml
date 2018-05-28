@@ -1,21 +1,36 @@
+### ENVIRONMENT VARIABLES ######################################################
+# You'll probably want to overwrite $TITLE and $TITLEID with values specific to
+# your project. The other ones can keep the default value just fine
+
 [env]
 # Project information
 TITLE = "Rust Project"
 TITLEID = "RUST00001"
 # Compilation specific
 CARGO_TARGET_DIR = "target"
-RUST_TARGET_PATH = "${CARGO_MAKE_WORKING_DIRECTORY}"
 CARGO_OUT_DIR = "${CARGO_TARGET_DIR}/armv7-vita-eabihf/release"
+RUST_TARGET_PATH = "${CARGO_TARGET_DIR}"
 CC="arm-vita-eabi-gcc"
 LINKER = "arm-vita-eabi-gcc"
 LINKER_FLAGS = "-Wl,-q"
 LINKER_SPECS = "${CARGO_OUT_DIR}/specs"
 
+### BUILD TASKS ################################################################
+
+[tasks.clean-common]
+description = "Clean the `common.toml` file from the project directory."
+script_runner = "@shell"
+script = ["rm -f common.toml"]
+
+[tasks.clean]
+dependencies = ["clean-common"]
+command = "cargo"
+args = "clean"
 
 [tasks.default]
 alias = "vpk"
 
-[tasks.patch-specs]
+[tasks.patch-cc-specs]
 description = "Remove default `libc` linkage from the linker specs"
 script = [
   '${LINKER} -dumpspecs > "${LINKER_SPECS}"',
@@ -23,13 +38,25 @@ script = [
   'sed -i "s/crt0%O%s//g" "${LINKER_SPECS}"'
 ]
 
+[tasks.get-target-specs]
+condition = { script = "test ! -f ${RUST_TARGET_PATH}/armv7-vita-eabihf.json" }
+linux_script = [
+  "curl -SsL https://github.com/vita-rust/common/raw/master/armv7-vita-eabihf.json > armv7-vita-eabihf.json",
+]
+
 [tasks.build]
+description = "Build the project using `xargo`."
+dependencies = ["get-target-specs"]
 install_crate = "xargo"
 command = "xargo"
 args = ["build", "--target=armv7-vita-eabihf", "--release", "-vv"]
 
+
+### DISTRIBUTION TASKS #########################################################
+
 [tasks.elf]
-dependencies = ["build", "patch-specs"]
+description = "Build an ELF executable using the PS Vita linker."
+dependencies = ["build", "patch-cc-specs"]
 script = [
     """
     ${LINKER} ${LINKER_FLAGS} \
@@ -41,6 +68,7 @@ script = [
 ]
 
 [tasks.velf]
+description = "Build an VELF executable from the obtained ELF file."
 dependencies = ["elf"]
 script = [
   """
@@ -54,6 +82,7 @@ script = [
 ]
 
 [tasks.eboot-bin]
+description = "Build an `eboot.bin` file fromt the obtained VELF file."
 dependencies = ["velf"]
 script = [
   """
@@ -64,6 +93,7 @@ script = [
 ]
 
 [tasks.param-sfo]
+description = "Build the `param.sfo` manifest using with given TITLE and TITLEID."
 script = [
     """
     vita-mksfoex \
@@ -74,6 +104,7 @@ script = [
 ]
 
 [tasks.vpk]
+description = "Build a VPK distribution of the project executable and resources."
 dependencies = ["eboot-bin", "param-sfo"]
 script = [
   """
