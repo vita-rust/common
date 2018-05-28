@@ -6,6 +6,7 @@
 # Project information
 TITLE = "Rust Project"
 TITLEID = "RUST00001"
+STATIC_DIR = "static"
 # Compilation specific
 CARGO_TARGET_DIR = "target"
 CARGO_OUT_DIR = "${CARGO_TARGET_DIR}/armv7-vita-eabihf/release"
@@ -25,7 +26,7 @@ script = ["rm -f common.toml"]
 [tasks.clean]
 dependencies = ["clean-common"]
 command = "cargo"
-args = "clean"
+args = ["clean"]
 
 [tasks.default]
 alias = "vpk"
@@ -103,18 +104,30 @@ script = [
     """
 ]
 
+[tasks.asset-list]
+script = [
+  'mkdir -p ${CARGO_OUT_DIR}',
+  'find ${STATIC_DIR} -type f > "${CARGO_OUT_DIR}/assets"'
+]
+
+
 [tasks.vpk]
 description = "Build a VPK distribution of the project executable and resources."
-dependencies = ["eboot-bin", "param-sfo"]
+dependencies = ["asset-list", "eboot-bin", "param-sfo"]
 script = [
+  '''
+  VITA_PACK_VPK_FLAGS=$(
+    set +x;
+    while read -r line; do
+      echo -n "--add \"$line\"=\"${line#static/}\" ";
+    done < "${CARGO_OUT_DIR}/assets"
+  )
+  ''',
   """
   vita-pack-vpk \
           -s "${CARGO_OUT_DIR}/param.sfo" \
           -b "${CARGO_OUT_DIR}/eboot.bin" \
-          --add static/sce_sys/icon0.png=sce_sys/icon0.png \
-          --add static/sce_sys/livearea/contents/bg.png=sce_sys/livearea/contents/bg.png \
-          --add static/sce_sys/livearea/contents/startup.png=sce_sys/livearea/contents/startup.png \
-          --add static/sce_sys/livearea/contents/template.xml=sce_sys/livearea/contents/template.xml \
+          ${VITA_PACK_VPK_FLAGS}
           "${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.vpk"
   """
 ]
