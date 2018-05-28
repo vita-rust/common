@@ -1,15 +1,18 @@
 ### ENVIRONMENT VARIABLES ######################################################
-# You'll probably want to overwrite $TITLE and $TITLEID with values specific to
-# your project. The other ones can keep the default value just fine
+# You'll probably want to overwrite $TITLE and $TITLEID with values specific
+# to your project. Set $STATIC_DIR to change the directory for static files:
+# default is `static`.
 
 [env]
 # Project information
 TITLE = "Rust Project"
 TITLEID = "RUST00001"
+# Build configuration
 STATIC_DIR = "static"
-# Compilation specific
 CARGO_TARGET_DIR = "target"
-CARGO_OUT_DIR = "${CARGO_TARGET_DIR}/armv7-vita-eabihf/release"
+# Compilation specific
+RUST_TARGET = "armv7-vita-eabihf"
+CARGO_OUT_DIR = "${CARGO_TARGET_DIR}/${RUST_TARGET}/release"
 RUST_TARGET_PATH = "${CARGO_TARGET_DIR}"
 CC="arm-vita-eabi-gcc"
 LINKER = "arm-vita-eabi-gcc"
@@ -25,14 +28,12 @@ script = ["rm -f common.toml"]
 
 [tasks.clean]
 dependencies = ["clean-common"]
-command = "cargo"
-args = ["clean"]
 
 [tasks.default]
 alias = "vpk"
 
 [tasks.patch-cc-specs]
-description = "Remove default `libc` linkage from the linker specs"
+description = "Remove default `libc` linkage from the linker specs."
 script = [
   '${LINKER} -dumpspecs > "${LINKER_SPECS}"',
   'sed -i "s/%{!shared:%{g*:-lg} %{!p:%{!pg:-lc}}%{p:-lc_p}%{pg:-lc_p}}//g" "${LINKER_SPECS}"',
@@ -40,10 +41,11 @@ script = [
 ]
 
 [tasks.get-target-specs]
-condition = { script = "test ! -f ${RUST_TARGET_PATH}/armv7-vita-eabihf.json" }
-linux_script = [
-  "curl -SsL https://github.com/vita-rust/common/raw/master/armv7-vita-eabihf.json > armv7-vita-eabihf.json",
-]
+description = "Download target specs from the `vita-rust/common` git repository."
+env = { TARGET_JSON_URL = "https://github.com/vita-rust/common/raw/master/${RUST_TARGET}.json"}
+condition = { script = "test ! -f ${RUST_TARGET_PATH}/${RUST_TARGET}.json" }
+script_runner = "bash"
+script = [ 'curl -SsL "${TARGET_JSON_URL}" > "${RUST_TARGET_PATH}/${RUST_TARGET}.json"' ]
 
 [tasks.build]
 description = "Build the project using `xargo`."
@@ -56,15 +58,15 @@ args = ["build", "--target=armv7-vita-eabihf", "--release", "-vv"]
 ### DISTRIBUTION TASKS #########################################################
 
 [tasks.elf]
-description = "Build an ELF executable using the PS Vita linker."
+description = "Build an ELF executable using the `vitasdk` linker."
 dependencies = ["build", "patch-cc-specs"]
 script = [
     """
     ${LINKER} ${LINKER_FLAGS} \
-        "-specs=${LINKER_SPECS}" \
+        -specs="${LINKER_SPECS}" \
         -L"${CARGO_OUT_DIR}" \
-        -l${CARGO_MAKE_CRATE_FS_NAME} \
-        -o${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf
+        -l"${CARGO_MAKE_CRATE_FS_NAME}" \
+        -o"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf"
     """
 ]
 
@@ -104,30 +106,30 @@ script = [
     """
 ]
 
-[tasks.asset-list]
+[tasks.manifest]
+description = "List all static resources into a manifest file."
 script = [
-  'mkdir -p ${CARGO_OUT_DIR}',
-  'find ${STATIC_DIR} -type f > "${CARGO_OUT_DIR}/assets"'
+  'mkdir -p "${CARGO_OUT_DIR}"',
+  'find "${STATIC_DIR}" -type f > "${CARGO_OUT_DIR}/MANIFEST"'
 ]
-
 
 [tasks.vpk]
 description = "Build a VPK distribution of the project executable and resources."
-dependencies = ["asset-list", "eboot-bin", "param-sfo"]
+dependencies = ["manifest", "eboot-bin", "param-sfo"]
 script = [
   '''
   VITA_PACK_VPK_FLAGS=$(
     set +x;
     while read -r line; do
-      echo -n "--add \"$line\"=\"${line#static/}\" ";
-    done < "${CARGO_OUT_DIR}/assets"
+      echo -n "--add $line=${line#static/} ";
+    done < "${CARGO_OUT_DIR}/MANIFEST"
   )
   ''',
   """
   vita-pack-vpk \
           -s "${CARGO_OUT_DIR}/param.sfo" \
           -b "${CARGO_OUT_DIR}/eboot.bin" \
-          ${VITA_PACK_VPK_FLAGS}
+          ${VITA_PACK_VPK_FLAGS} \
           "${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.vpk"
   """
 ]
