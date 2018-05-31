@@ -134,6 +134,7 @@ script = [
 
 [tasks.vpk]
 description = "Build a VPK distribution of the project executable and resources."
+dependencies = ["eboot-bin", "param-sfo", "manifest"]
 script_runner = "@rust"
 script = [
     '''
