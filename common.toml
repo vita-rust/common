@@ -95,41 +95,28 @@ script = [
     """
 ]
 
+[tasks.strip-elf]
+description = "Strip the produced ELF executable."
+dependencies = ["elf"]
+command = "arm-vita-eabi-strip"
+args = ["-g", '"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf"']
+
 [tasks.velf]
 description = "Build an VELF executable from the obtained ELF file."
-dependencies = ["elf"]
-script = [
-  """
-  arm-vita-eabi-strip -g "${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf"
-  """,
-  """
-  vita-elf-create \
-      "${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf" \
-      "${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.velf"
-  """
-]
+dependencies = ["elf", "strip-elf"]
+command = "vita-elf-create"
+args = ['"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf"', '"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.velf"']
 
 [tasks.eboot-bin]
 description = "Build an `eboot.bin` file fromt the obtained VELF file."
 dependencies = ["velf"]
-script = [
-  """
-  vita-make-fself -s \
-      "${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.velf" \
-      "${CARGO_OUT_DIR}/eboot.bin"
-  """
-]
+command = "vita-make-fself"
+args = ["-s", '"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.velf"', '"${CARGO_OUT_DIR}/eboot.bin"']
 
 [tasks.param-sfo]
 description = "Build the `param.sfo` manifest using with given TITLE and TITLEID."
-script = [
-    """
-    vita-mksfoex \
-        -s TITLE_ID="${TITLEID}" \
-        "${TITLE}" \
-        "${CARGO_OUT_DIR}/param.sfo"
-    """
-]
+command = "vita-mksfoex"
+args = ["-s", 'TITLE_ID="${TITLEID}"', '"${TITLE}"', '"${CARGO_OUT_DIR}/param.sfo"']
 
 [tasks.manifest]
 description = "List all static resources into a manifest file."
