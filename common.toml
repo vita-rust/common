@@ -11,6 +11,7 @@ TITLEID = "RUST00001"
 # Build configuration
 STATIC_DIR = "static"
 CARGO_TARGET_DIR = { script = ["echo ${CARGO_TARGET_DIR:=target}"] }
+RUST_TARGET_PATH = { script = ["echo ${RUST_TARGET_PATH:=$(echo \"$(rustc --print sysroot)/share/targets\")}"]}
 # Compilation specific
 RUST_TARGET = "armv7-vita-eabihf"
 CARGO_OUT_DIR = "${CARGO_TARGET_DIR}/${RUST_TARGET}/release"
@@ -41,8 +42,9 @@ alias = "vpk"
 
 [tasks.patch-cc-specs]
 description = "Remove default `libc` linkage from the linker specs."
+condition_script = ['test ! -f "${TARGET_LINKER_SPECS}"']
 script = [
-  'mkdir -p "${TARGET_LINKER_SPECS}"',
+  'mkdir -p "$(dirname "${TARGET_LINKER_SPECS}")"',
   '${TARGET_LINKER} -dumpspecs > "${TARGET_LINKER_SPECS}"',
   'sed -i "s/%{!shared:%{g*:-lg} %{!p:%{!pg:-lc}}%{p:-lc_p}%{pg:-lc_p}}//g" "${TARGET_LINKER_SPECS}"',
   'sed -i "s/crt0%O%s//g" "${TARGET_LINKER_SPECS}"'
@@ -51,10 +53,11 @@ script = [
 [tasks.get-target-specs]
 description = "Download target specs from the `vita-rust/common` git repository."
 env = { TARGET_JSON_URL = "https://github.com/vita-rust/common/raw/master/${RUST_TARGET}.json"}
-condition_script = [ 'test ! -f "${CARGO_TARGET_DIR}/${RUST_TARGET}.json"' ]
+condition = { env_set = ["RUST_TARGET_PATH"] }
+condition_script = [ 'test ! -f "${RUST_TARGET_PATH}/${RUST_TARGET}.json"' ]
 script = [
-    'mkdir -p "${CARGO_TARGET_DIR}"',
-    'curl -SsL "${TARGET_JSON_URL}" > "${CARGO_TARGET_DIR}/${RUST_TARGET}.json"',
+    'mkdir -p "${RUST_TARGET_PATH}"',
+    'curl -SsL "${TARGET_JSON_URL}" > "${RUST_TARGET_PATH}/${RUST_TARGET}.json"',
 ]
 
 
@@ -68,18 +71,6 @@ install_crate = "xargo"
 command = "xargo"
 args = ["build", "--target=armv7-vita-eabihf", "--release", "-vv"]
 
-[tasks.xbuild.env]
-# We need an absolute path to the rustc specs, so we make sure we have one.
-CC="${TARGET_CC}"
-RUST_TARGET_PATH = { script = [
-    '''
-    if [ "${CARGO_TARGET_DIR}" == "${CARGO_TARGET_DIR#/}" ]; then
-      echo "${CARGO_MAKE_WORKING_DIRECTORY}/${CARGO_TARGET_DIR}"
-    else
-      echo "${CARGO_TARGET_DIR}"
-    fi
-    '''
-]}
 
 ### DISTRIBUTION TASKS #########################################################
 
@@ -96,28 +87,28 @@ script = [
     """
 ]
 
-[tasks.strip-elf]
+[tasks.strip]
 description = "Strip the produced ELF executable."
 dependencies = ["elf"]
 command = "arm-vita-eabi-strip"
-args = ["-g", '"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf"']
+args = ["-g", '${CARGO_OUT_DIR}/lib${CARGO_MAKE_CRATE_FS_NAME}.a']
 
 [tasks.velf]
 description = "Build an VELF executable from the obtained ELF file."
-dependencies = ["elf", "strip-elf"]
+dependencies = ["strip"]
 command = "vita-elf-create"
-args = ['"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf"', '"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.velf"']
+args = ['${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf', '${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.velf']
 
 [tasks.eboot-bin]
 description = "Build an `eboot.bin` file fromt the obtained VELF file."
 dependencies = ["velf"]
 command = "vita-make-fself"
-args = ["-s", '"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.velf"', '"${CARGO_OUT_DIR}/eboot.bin"']
+args = ["-s", '${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.velf', '${CARGO_OUT_DIR}/eboot.bin']
 
 [tasks.param-sfo]
 description = "Build the `param.sfo` manifest using with given TITLE and TITLEID."
 command = "vita-mksfoex"
-args = ["-s", 'TITLE_ID="${TITLEID}"', '"${TITLE}"', '"${CARGO_OUT_DIR}/param.sfo"']
+args = ["-s", 'TITLE_ID=${TITLEID}', '${TITLE}', '${CARGO_OUT_DIR}/param.sfo']
 
 [tasks.manifest]
 description = "List all static resources into a manifest file."
