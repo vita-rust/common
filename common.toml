@@ -14,10 +14,10 @@ CARGO_TARGET_DIR = { script = ["echo ${CARGO_TARGET_DIR:=target}"] }
 # Compilation specific
 RUST_TARGET = "armv7-vita-eabihf"
 CARGO_OUT_DIR = "${CARGO_TARGET_DIR}/${RUST_TARGET}/release"
-CC="arm-vita-eabi-gcc"
-LINKER = "arm-vita-eabi-gcc"
-LINKER_FLAGS = "-Wl,-q"
-LINKER_SPECS = "${CARGO_OUT_DIR}/specs"
+TARGET_CC="arm-vita-eabi-gcc"
+TARGET_LINKER = "arm-vita-eabi-gcc"
+TARGET_LINKER_FLAGS = "-Wl,-q"
+TARGET_LINKER_SPECS = "${CARGO_OUT_DIR}/specs"
 
 
 ### CLEAN ######################################################################
@@ -42,10 +42,10 @@ alias = "vpk"
 [tasks.patch-cc-specs]
 description = "Remove default `libc` linkage from the linker specs."
 script = [
-  'mkdir -p "${LINKER_SPECS}"',
-  '${LINKER} -dumpspecs > "${LINKER_SPECS}"',
-  'sed -i "s/%{!shared:%{g*:-lg} %{!p:%{!pg:-lc}}%{p:-lc_p}%{pg:-lc_p}}//g" "${LINKER_SPECS}"',
-  'sed -i "s/crt0%O%s//g" "${LINKER_SPECS}"'
+  'mkdir -p "${TARGET_LINKER_SPECS}"',
+  '${TARGET_LINKER} -dumpspecs > "${TARGET_LINKER_SPECS}"',
+  'sed -i "s/%{!shared:%{g*:-lg} %{!p:%{!pg:-lc}}%{p:-lc_p}%{pg:-lc_p}}//g" "${TARGET_LINKER_SPECS}"',
+  'sed -i "s/crt0%O%s//g" "${TARGET_LINKER_SPECS}"'
 ]
 
 [tasks.get-target-specs]
@@ -70,6 +70,7 @@ args = ["build", "--target=armv7-vita-eabihf", "--release", "-vv"]
 
 [tasks.xbuild.env]
 # We need an absolute path to the rustc specs, so we make sure we have one.
+CC="${TARGET_CC}"
 RUST_TARGET_PATH = { script = [
     '''
     if [ "${CARGO_TARGET_DIR}" == "${CARGO_TARGET_DIR#/}" ]; then
@@ -87,8 +88,8 @@ description = "Build an ELF executable using the `vitasdk` linker."
 dependencies = ["xbuild", "patch-cc-specs"]
 script = [
     """
-    ${LINKER} ${LINKER_FLAGS} \
-        -specs="${LINKER_SPECS}" \
+    ${TARGET_LINKER} ${TARGET_LINKER_FLAGS} \
+        -specs="${TARGET_LINKER_SPECS}" \
         -L"${CARGO_OUT_DIR}" \
         -l"${CARGO_MAKE_CRATE_FS_NAME}" \
         -o"${CARGO_OUT_DIR}/${CARGO_MAKE_CRATE_NAME}.elf"
