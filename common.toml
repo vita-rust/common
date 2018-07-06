@@ -69,7 +69,7 @@ description = "Build the project using `xargo`."
 dependencies = ["get-target-specs"]
 install_crate = "xargo"
 command = "xargo"
-args = ["build", "--target=armv7-vita-eabihf", "--release", "-vv"]
+args = ["build", "--target=armv7-vita-eabihf", "--release", "-vv", "--all-features"]
 
 
 ### DISTRIBUTION TASKS #########################################################
