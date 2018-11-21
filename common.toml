@@ -43,11 +43,36 @@ alias = "vpk"
 [tasks.patch-cc-specs]
 description = "Remove default `libc` linkage from the linker specs."
 condition_script = ['test ! -f "${TARGET_LINKER_SPECS}"']
+script_runner = "@rust"
 script = [
-  'mkdir -p "$(dirname "${TARGET_LINKER_SPECS}")"',
-  '${TARGET_LINKER} -dumpspecs > "${TARGET_LINKER_SPECS}"',
-  'sed -i "s/%{!shared:%{g*:-lg} %{!p:%{!pg:-lc}}%{p:-lc_p}%{pg:-lc_p}}//g" "${TARGET_LINKER_SPECS}"',
-  'sed -i "s/crt0%O%s//g" "${TARGET_LINKER_SPECS}"'
+  """
+  use std::io::Write;
+
+  fn main() {
+    // create target specs directory
+    let specs_file = std::path::PathBuf::from(env!("TARGET_LINKER_SPECS"));
+    std::fs::create_dir(specs_file.parent().expect("invalid path to specs file"));
+
+    // dump linker specs
+    let out = std::process::Command::new(env!("TARGET_LINKER"))
+      .arg("-dumpspecs")
+      .stdout(std::process::Stdio::piped())
+      .output()
+      .expect("failed to extract linker specs");
+
+    // remove libc linker flags
+    let specs = String::from_utf8(out.stdout)
+      .expect("linker did not produce UTF-8 output")
+      .replace("%{!shared:%{g*:-lg} %{!p:%{!pg:-lc}}%{p:-lc_p}%{pg:-lc_p}}", "")
+      .replace("crt0%O%s", "");
+
+    // write to specs_file
+    let x = std::fs::File::create(specs_file)
+      .expect("could not open specs file")
+      .write_all(specs.as_bytes())
+      .expect("could not write specs file");
+  }
+  """
 ]
 
 [tasks.get-target-specs]
