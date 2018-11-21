@@ -42,7 +42,6 @@ alias = "vpk"
 
 [tasks.patch-cc-specs]
 description = "Remove default `libc` linkage from the linker specs."
-condition_script = ['test ! -f "${TARGET_LINKER_SPECS}"']
 script_runner = "@rust"
 script = [
   """
