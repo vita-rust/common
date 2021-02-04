@@ -20,7 +20,7 @@
   "linker": "arm-vita-eabi-ld",
   "linker-flavor": "ld",
   "linker-is-gnu": true,
-  "llvm-target": "armv7a-vita-eabi",
+  "llvm-target": "armv7a-vita-eabihf",
   "max-atomic-width": 32,
   "no-compiler-rt": true,
   "os": "vita",
@@ -30,5 +30,5 @@
   "target-c-int-width": "32",
   "target-endian": "little",
   "target-pointer-width": "32",
-  "vendor":"sony",
+  "vendor": "sony"
 }
