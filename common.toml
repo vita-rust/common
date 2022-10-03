@@ -88,19 +88,18 @@ script = [
 
 ### BUILD ######################################################################
 
-[tasks.xbuild]
-description = "Build the project using `xargo`."
+[tasks.build]
+description = "Build the project using `cargo`."
 dependencies = ["get-target-specs"]
-install_crate = "xargo"
-command = "xargo"
-args = ["build", "--target=armv7-vita-eabihf", "--release", "-vv", "--all-features"]
+command = "cargo"
+args = ["build", "-Z", "build-std=core,alloc", "--target=${RUST_TARGET_PATH}/armv7-vita-eabihf.json", "--release", "-vv", "--all-features"]
 
 
 ### DISTRIBUTION TASKS #########################################################
 
 [tasks.elf]
 description = "Build an ELF executable using the `vitasdk` linker."
-dependencies = ["xbuild", "patch-cc-specs"]
+dependencies = ["build", "patch-cc-specs"]
 script = [
     """
     ${TARGET_LINKER} ${TARGET_LINKER_FLAGS} \
